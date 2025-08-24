@@ -4,6 +4,7 @@ import shutil
 import platform
 import configparser
 import time
+import requests
 from colorama import Fore, Style, init
 import sys
 import traceback
@@ -21,8 +22,30 @@ EMOJI = {
     'FILE': '📄',
     'BACKUP': '💾',
     'RESET': '🔄',
-    'VERSION': '🏷️'
+    'VERSION': '🏷️',
+    'DOWNLOAD': '📥'
 }
+
+def get_latest_version(translator=None):
+    """Get latest Cursor version from GitHub repository"""
+            
+    url = "https://raw.githubusercontent.com/flyeric0212/cursor-history-links/refs/heads/main/version-history.json"
+    try:
+        print(f"{Fore.CYAN}{EMOJI['DOWNLOAD']} {translator.get('bypass.downloading_version_info') if translator else 'Downloading version information...'}{Style.RESET_ALL}")
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        version_data = response.json()
+        if "versions" in version_data and len(version_data["versions"]) > 0:
+            latest_version = version_data["versions"][0]["version"]
+            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} {translator.get('bypass.latest_version_found', version=latest_version) if translator else f'Latest version found: {latest_version}'}{Style.RESET_ALL}")
+            return latest_version
+        else:
+            print(f"{Fore.RED}{EMOJI['ERROR']} {translator.get('bypass.no_versions_found') if translator else 'No versions found in the version history'}{Style.RESET_ALL}")
+            return None
+    except Exception as e:
+        print(f"{Fore.RED}{EMOJI['ERROR']} {translator.get('bypass.version_fetch_failed', error=str(e)) if translator else f'Failed to fetch latest version: {str(e)}'}{Style.RESET_ALL}")
+        return None
 
 def get_product_json_path(translator=None):
     """Get Cursor product.json path"""
@@ -101,6 +124,10 @@ def bypass_version(translator=None):
     try:
         print(f"\n{Fore.CYAN}{EMOJI['INFO']} {translator.get('bypass.starting') if translator else 'Starting Cursor version bypass...'}{Style.RESET_ALL}")
         
+        # Get latest version from GitHub
+        latest_version = get_latest_version(translator)
+        fallback_version = "1.5.4"
+        
         # Get product.json path
         product_json_path = get_product_json_path(translator)
         print(f"{Fore.CYAN}{EMOJI['FILE']} {translator.get('bypass.found_product_json', path=product_json_path) if translator else f'Found product.json: {product_json_path}'}{Style.RESET_ALL}")
@@ -123,7 +150,7 @@ def bypass_version(translator=None):
         print(f"{Fore.CYAN}{EMOJI['VERSION']} {translator.get('bypass.current_version', version=current_version) if translator else f'Current version: {current_version}'}{Style.RESET_ALL}")
         
         # Check if version needs to be modified
-        if compare_versions(current_version, "0.46.0") < 0:
+        if compare_versions(current_version, "1.5.4") < 0 or (latest_version and compare_versions(current_version, latest_version) != 0):
             # Create backup
             timestamp = time.strftime("%Y%m%d%H%M%S")
             backup_path = f"{product_json_path}.{timestamp}"
@@ -131,7 +158,7 @@ def bypass_version(translator=None):
             print(f"{Fore.GREEN}{EMOJI['BACKUP']} {translator.get('bypass.backup_created', path=backup_path) if translator else f'Backup created: {backup_path}'}{Style.RESET_ALL}")
             
             # Modify version
-            new_version = "0.48.7"
+            new_version = latest_version if latest_version else fallback_version
             product_data["version"] = new_version
             
             # Save modified product.json
@@ -144,7 +171,10 @@ def bypass_version(translator=None):
                 print(f"{Fore.RED}{EMOJI['ERROR']} {translator.get('bypass.write_failed', error=str(e)) if translator else f'Failed to write product.json: {str(e)}'}{Style.RESET_ALL}")
                 return False
         else:
-            print(f"{Fore.YELLOW}{EMOJI['INFO']} {translator.get('bypass.no_update_needed', version=current_version) if translator else f'No update needed. Current version {current_version} is already >= 0.46.0'}{Style.RESET_ALL}")
+            if latest_version:
+                print(f"{Fore.YELLOW}{EMOJI['INFO']} {translator.get('bypass.already_latest', version=current_version) if translator else f'Already at latest version: {current_version}'}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.YELLOW}{EMOJI['INFO']} {translator.get('bypass.no_update_needed', version=current_version) if translator else f'No update needed. Current version {current_version} is already >= 0.46.0'}{Style.RESET_ALL}")
             return True
     
     except Exception as e:
